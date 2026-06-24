@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault.exe — The State Desync Heist</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="crt-overlay" aria-hidden="true"></div>
+
+  <!-- Boot sequence -->
+  <div id="boot-screen" class="boot-screen" role="dialog" aria-label="Boot sequence">
+    <div class="boot-panel">
+      <pre id="boot-log" class="boot-log"></pre>
+      <button id="boot-skip" class="btn btn-ghost" type="button">Skip ▸</button>
+    </div>
+  </div>
+
+  <!-- Login modal -->
+  <div id="login-modal" class="modal hidden" role="dialog" aria-labelledby="login-title">
+    <div class="modal-panel login-panel">
+      <div class="modal-glyph" aria-hidden="true">⬡</div>
+      <h2 id="login-title">Vault.exe</h2>
+      <p class="modal-sub">Blackmarket access terminal</p>
+      <label class="field-label" for="nickname">Hacker handle</label>
+      <input id="nickname" class="field-input" type="text" maxlength="32" placeholder="ghost_runner" autocomplete="off" spellcheck="false">
+      <p class="field-note">Your session may remember more than your screen does.</p>
+      <button id="enter-btn" class="btn btn-primary" type="button">Enter Blackmarket</button>
+    </div>
+  </div>
+
+  <!-- Victory overlay -->
+  <div id="victory-screen" class="victory-screen hidden" role="dialog" aria-label="Victory">
+    <div class="victory-panel">
+      <div class="victory-door" aria-hidden="true"></div>
+      <h2>CASE 7 UNLOCKED</h2>
+      <p class="victory-msg">The vault exhales stale neon air.</p>
+      <div class="flag-panel">
+        <span class="flag-label">FLAG</span>
+        <code id="flag-display"></code>
+      </div>
+      <button id="victory-close" class="btn btn-primary" type="button">Close terminal</button>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="header">
+      <div class="header-brand">
+        <h1>Vault.exe</h1>
+        <p class="header-sub">The State Desync Heist</p>
+      </div>
+      <div class="status-chips">
+        <span id="chip-ws" class="chip chip-off">WS: offline</span>
+        <span id="chip-guard" class="chip chip-guard-awake">Guard: awake</span>
+        <span id="chip-zone" class="chip">Zone: Lobby</span>
+        <span id="chip-session" class="chip chip-sync">Session: synced</span>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <!-- Left: contract board -->
+      <aside class="panel panel-contract" aria-label="Contract board">
+        <h2 class="panel-title">◈ Blackmarket Board</h2>
+        <div class="contract-card">
+          <span class="contract-tag">ACTIVE</span>
+          <h3>Contract: Open Case 7 inside the vault wing.</h3>
+          <p class="contract-reward">Payout: classified</p>
+        </div>
+        <ul class="lore-list">
+          <li>The vault has no endpoint.</li>
+          <li>The protocol manual is damaged.</li>
+          <li>The door remembers one thing. The session remembers another.</li>
+          <li>Case 7 flickers only when the guard sleeps.</li>
+          <li>Find the frame that should not exist.</li>
+        </ul>
+        <a class="manual-link" href="/manual" target="_blank" rel="noopener">📄 Damaged manual</a>
+
+        <section class="leaderboard" aria-label="Leaderboard">
+          <h3 class="lb-title">◈ Solvers</h3>
+          <ul id="leaderboard-list" class="lb-list">
+            <li class="lb-empty">No breaches yet.</li>
+          </ul>
+        </section>
+      </aside>
+
+      <!-- Center: game viewport -->
+      <section class="panel panel-game" aria-label="Vault map">
+        <div class="game-toolbar">
+          <span id="objective-text" class="objective">Reach the vault door. Watch the guard.</span>
+        </div>
+        <canvas id="game-canvas" width="640" height="400" aria-label="Pixel vault map"></canvas>
+        <div class="controls">
+          <button id="btn-back" class="btn btn-move" type="button" disabled>◂ Move Back</button>
+          <button id="btn-forward" class="btn btn-move btn-primary" type="button">Move Forward ▸</button>
+        </div>
+        <p class="controls-hint">WASD / Arrow keys supported</p>
+      </section>
+
+      <!-- Right: vault monitor -->
+      <aside class="panel panel-monitor" aria-label="Vault monitor">
+        <h2 class="panel-title">◈ Vault Monitor</h2>
+        <dl class="monitor-metrics">
+          <div class="metric">
+            <dt>Current zone</dt>
+            <dd id="mon-zone">Lobby</dd>
+          </div>
+          <div class="metric">
+            <dt>Access lane</dt>
+            <dd id="mon-lane">PUBLIC</dd>
+          </div>
+          <div class="metric">
+            <dt>Guard rotation</dt>
+            <dd id="mon-guard">AWAKE</dd>
+          </div>
+          <div class="metric">
+            <dt>Door status</dt>
+            <dd id="mon-door">SEALED</dd>
+          </div>
+          <div class="metric">
+            <dt>Path trace</dt>
+            <dd id="mon-path">1 node</dd>
+          </div>
+          <div class="metric full">
+            <dt>Last notice</dt>
+            <dd id="mon-notice" class="notice-text">Awaiting link...</dd>
+          </div>
+        </dl>
+        <div class="monitor-graph" aria-hidden="true">
+          <div class="graph-bar" style="--h:40%"></div>
+          <div class="graph-bar" style="--h:65%"></div>
+          <div class="graph-bar" style="--h:30%"></div>
+          <div class="graph-bar" style="--h:80%"></div>
+          <div class="graph-bar" style="--h:55%"></div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom: protocol log -->
+    <footer class="panel panel-log" aria-label="Protocol log">
+      <div class="log-header">
+        <span>PROTOCOL / EVENT FEED</span>
+        <span id="log-count" class="log-count">0 events</span>
+      </div>
+      <div id="protocol-log" class="protocol-log" role="log" aria-live="polite"></div>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
