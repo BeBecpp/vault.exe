@@ -255,7 +255,7 @@ function sendHello(ws, conn, session) {
           'Case 7 only listens in the dark.',
         ],
       },
-      session.sessionSaltByte
+      0
     )
   );
 }
@@ -430,42 +430,26 @@ function handleHiddenAction(ws, conn, session, payload) {
 }
 
 function decodeClientFrame(raw, session) {
-  const trySalts = new Set();
-  if (session) trySalts.add(session.sessionSaltByte);
-  trySalts.add(0);
-
-  if (raw.length >= 5) {
-    try {
-      const payloadBytes = raw.subarray(5);
-      const payload = JSON.parse(payloadBytes.toString('utf8'));
-      if (payload.resume) {
-        const resumed = getSessionByResume(String(payload.resume));
-        if (resumed) trySalts.add(resumed.sessionSaltByte);
-      }
-    } catch {
-      /* ignore peek errors */
-    }
+  if (!Buffer.isBuffer(raw) || raw.length < 2) {
+    return {
+      decoded: { ok: false, code: 'ERR_BAD_FRAME' },
+      session: session || null,
+    };
   }
 
-  for (const salt of trySalts) {
-    const decoded = decodeFrame(raw, CLIENT_MAGIC, salt);
-    if (!decoded.ok) continue;
-
+  // START always uses salt 0 — client does not know calibration yet
+  if (raw[1] === CLIENT_TYPE.START) {
+    const decoded = decodeFrame(raw, CLIENT_MAGIC, 0);
     let resolvedSession = session;
-    if (
-      decoded.type === CLIENT_TYPE.START &&
-      decoded.payload &&
-      decoded.payload.resume &&
-      !resolvedSession
-    ) {
+    if (decoded.ok && decoded.payload?.resume && !resolvedSession) {
       resolvedSession = getSessionByResume(String(decoded.payload.resume)) || null;
     }
-
     return { decoded, session: resolvedSession };
   }
 
-  const fallback = decodeFrame(raw, CLIENT_MAGIC, session ? session.sessionSaltByte : 0);
-  return { decoded: fallback, session: session || null };
+  const salt = session ? session.sessionSaltByte : 0;
+  const decoded = decodeFrame(raw, CLIENT_MAGIC, salt);
+  return { decoded, session: session || null };
 }
 
 function handleClientFrame(ws, conn, raw) {

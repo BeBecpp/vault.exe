@@ -123,7 +123,7 @@ async function run() {
   const wsB = await connect();
   let seqB = 1;
   const helloBP = drainHello(wsB, cal);
-  wsB.send(encode(TYPE.START, seqB++, { nickname: 'solve_bot', resume }, cal));
+  wsB.send(encode(TYPE.START, seqB++, { nickname: 'solve_bot', resume }, 0));
   await helloBP;
   console.log('  Tab B resumed at Security Room');
 

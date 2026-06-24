@@ -80,6 +80,7 @@
   let animFrame = 0;
   let case7Flicker = false;
   let doorPulse = 0;
+  let protocolReady = false;
 
   const roomLayout = [
     { x: 60, y: 180, w: 80, h: 60, label: 'Lobby' },
@@ -98,7 +99,8 @@
     return (type + seqHi + seqLo + payloadLength + saltByte) & 0xff;
   }
 
-  function encodeFrame(type, payloadObj) {
+  function encodeFrame(type, payloadObj, saltByte) {
+    const salt = saltByte !== undefined ? saltByte : calibration;
     const payloadStr = JSON.stringify(payloadObj);
     const payloadBytes = new TextEncoder().encode(payloadStr);
     const frame = new Uint8Array(5 + payloadBytes.length);
@@ -107,7 +109,7 @@
     frame[1] = type;
     frame[2] = (seq >> 8) & 0xff;
     frame[3] = seq & 0xff;
-    frame[4] = computeChecksum(type, seq, payloadBytes.length, calibration);
+    frame[4] = computeChecksum(type, seq, payloadBytes.length, salt);
     frame.set(payloadBytes, 5);
     clientSeq += 1;
     return frame;
@@ -121,7 +123,8 @@
     const seq = (view[2] << 8) | view[3];
     const checksum = view[4];
     const payloadBytes = view.subarray(5);
-    const expected = computeChecksum(type, seq, payloadBytes.length, calibration);
+    const salt = type === SERVER.HELLO ? 0 : calibration;
+    const expected = computeChecksum(type, seq, payloadBytes.length, salt);
     if (checksum !== expected) return { error: 'ERR_BAD_CHECKSUM', type, seq };
     try {
       const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
@@ -131,12 +134,21 @@
     }
   }
 
-  function sendFrame(type, payload) {
+  function sendFrame(type, payload, saltByte) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       log('Cannot send — socket offline', 'err');
       return;
     }
-    ws.send(encodeFrame(type, payload));
+    ws.send(encodeFrame(type, payload, saltByte));
+  }
+
+  function setMovementEnabled(enabled) {
+    if (!enabled) {
+      btnBack.disabled = true;
+      btnForward.disabled = true;
+      return;
+    }
+    setZoneUI(currentZone);
   }
 
   // ─── Logging ─────────────────────────────────────────────
@@ -382,6 +394,9 @@
     }
 
     clientSeq = 1;
+    calibration = 0;
+    protocolReady = false;
+    setMovementEnabled(false);
     ws = new WebSocket(wsUrl());
     ws.binaryType = 'arraybuffer';
 
@@ -390,9 +405,7 @@
       log('WebSocket connected', 'ok');
       const payload = { nickname };
       if (resumeToken) payload.resume = resumeToken;
-      const startSalt = resumeToken ? Number(localStorage.getItem(STORAGE_CALIB) || 0) : 0;
-      if (startSalt) calibration = startSalt;
-      sendFrame(ACTION.start, payload);
+      sendFrame(ACTION.start, payload, 0);
     });
 
     ws.addEventListener('message', (ev) => {
@@ -434,8 +447,11 @@
           calibration = payload.calibration;
           localStorage.setItem(STORAGE_CALIB, String(calibration));
         }
+        protocolReady = true;
         if (payload.zone !== undefined) {
           setZoneUI(payload.zone, payload.zoneName);
+        } else {
+          setMovementEnabled(true);
         }
         log(`HELLO — session linked (zone: ${payload.zoneName || '?'})`, 'ok');
         chipSession.textContent = 'Session: lane active';
@@ -490,6 +506,7 @@
   // ─── Movement ────────────────────────────────────────────
 
   function move(dir) {
+    if (!protocolReady) return;
     sendFrame(ACTION.step, { dir });
   }
 
